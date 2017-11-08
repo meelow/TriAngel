@@ -12,7 +12,7 @@
 //  18led x 18led x 18led
 //  54 leds
 
-#define FASTLED_ALLOW_INTERRUPTS 1
+#define FASTLED_ALLOW_INTERRUPTS 0
 
 #include "Arduino.h"
 #include "FastLED.h"
@@ -36,24 +36,7 @@ FASTLED_USING_NAMESPACE
 // helper macro:
 #define ARRAY_SIZE(A) (sizeof(A) / sizeof((A)[0]))
 
-// global array of LED pixels for FastLED library:
-CRGB leds[NUM_LEDS_ALL];
-CRGBPalette16 palette_current;
-
-// for buttons:
-// Instantiate a Bounce object
-Bounce button1 = Bounce();
-Bounce button2 = Bounce();
-
-void setPalette(uint8_t index);
-void blink();
-void loop_topSpot(uint8_t time);
-void changePalette();
-void setup_buttons();
-void setup_leds();
-void loop_buttons();
-void loop_fourPoints(uint8_t timeCounter);
-
+// a vertex is a point of the pyramid containing 3 pixels, one on each edge
 typedef struct
 {
   uint16_t pixel1;
@@ -62,17 +45,20 @@ typedef struct
   CRGB color;
 } type_vertex;
 
+// a edge is a line connecting two vertices. it has a start and an end pixel
 typedef struct
 {
   uint16_t start;
   uint16_t end;
 } type_edge;
 
-type_vertex v1;
-type_vertex v2;
-type_vertex v3;
-type_vertex v4;
+// the pyramid contains 4 vertices
+type_vertex v1; // ground point near the connector
+type_vertex v2; // next ground point following the physical led string
+type_vertex v3; // next ground point following the physical led string
+type_vertex v4; // pyramid top
 
+// the pyramid contains 6 edges connecting two vertices each:
 type_edge edges[6] = {
   {0, 23},    // [0] between v1 and v2
   {24, 41},   // [1] between v2 and v3
@@ -81,6 +67,23 @@ type_edge edges[6] = {
   {78, 95},   // [4] between v4 and v2  reverse?
   {96, 113}   // [5] betwen v3 and v4
 };
+
+// global array of LED pixels for FastLED library:
+CRGB leds[NUM_LEDS_ALL];
+CRGBPalette16 palette_current;
+
+// Button object for Debounce library:
+Bounce button1 = Bounce();
+Bounce button2 = Bounce();
+
+// prototypes of all functions:
+void setup_buttons();
+void setup_leds();
+void loop_buttons();
+void loop_blink();
+void loop_topSpot(uint8_t time);
+void loop_fourPoints(uint8_t timeCounter);
+void topSpot_setPalette(uint8_t index);
 
 void setup() {
   // 3 second delay for recovery, slowly blinking build in LED
@@ -117,8 +120,13 @@ void loop()
     FastLED.show();
   }
 
-  EVERY_N_MILLISECONDS(200) { blink(); }
-
+  EVERY_N_MILLISECONDS(500) { loop_blink(); }
+/*
+  digitalWrite(LED_BUILTIN, true);
+  delay(1000);
+  digitalWrite(LED_BUILTIN, false);
+  delay(1000);
+*/
 }
 
 void setup_buttons()
@@ -145,7 +153,7 @@ void setup_leds()
    FastLED.show();
   }
 
-  // fade all leds to black:
+  // fade all leds to black slowly:
   for( int i=0; i<255; i++)
   {
     fadeToBlackBy(leds, NUM_LEDS_ALL, 1);
@@ -162,23 +170,20 @@ void loop_buttons()
   if( button1.fell() )
   {
     palette_index++;
-    setPalette(palette_index);
+    topSpot_setPalette(palette_index);
   }
   if( button2.fell() )
   {
     palette_index--;
-    setPalette(palette_index);
+    topSpot_setPalette(palette_index);
   }
   // Turn on the LED if either button is pressed :
   if ( button1.read() == LOW || button2.read() == LOW ) {
     digitalWrite(LED_BUILTIN, HIGH );
   }
-  else {
-    digitalWrite(LED_BUILTIN, LOW );
-  }
 }
 
-void blink()
+void loop_blink()
 {
   static bool on = true;
   // turn the LED on (HIGH is the voltage level)
@@ -195,27 +200,18 @@ void paint_edge(type_edge e)
 
 void loop_fourPoints(uint8_t timeCounter)
 {
-  const CHSV g = CHSV(HUE_GREEN, 255, 255);
-  const CHSV y = CHSV(HUE_YELLOW, 255, 255);
-  const CHSV r = CHSV(HUE_RED, 255, 255);
-  const CHSV p = CHSV(HUE_PURPLE, 255, 255);
-  const CHSV o = CHSV(HUE_ORANGE,255, 255);
-/*
-  CHSVPalette16 pal1 = CHSVPalette16(y,y,y,y, o,o,o,o, y,y,y,y, o,o,o,o);
-  CHSVPalette16 pal2 = CHSVPalette16(g,g,g,g, r,r,r,r, p,p,p,p, y,y,y,y);
-*/
-CHSVPalette16 YellowAndOrange = CHSVPalette16(
-  CHSV(HUE_YELLOW-15, 255, 255),CHSV(HUE_YELLOW-10, 255, 255),CHSV(HUE_YELLOW-5, 255, 255),CHSV(HUE_YELLOW, 255, 255),
-  CHSV(HUE_ORANGE-15,255, 255), CHSV(HUE_ORANGE-10,255, 255), CHSV(HUE_ORANGE-5,255, 255), CHSV(HUE_ORANGE,255, 255),
-  CHSV(HUE_YELLOW-15, 255, 255),CHSV(HUE_YELLOW-10, 255, 255),CHSV(HUE_YELLOW-5, 255, 255),CHSV(HUE_YELLOW, 255, 255),
-  CHSV(HUE_ORANGE-15,255, 255), CHSV(HUE_ORANGE-10,255, 255), CHSV(HUE_ORANGE-5,255, 255), CHSV(HUE_ORANGE,255, 255)
-);
-CHSVPalette16 RedAndPurple = CHSVPalette16(
-  CHSV(HUE_RED-15, 255, 255),CHSV(HUE_RED-10, 255, 255),CHSV(HUE_RED-5, 255, 255),CHSV(HUE_RED, 255, 255),
-  CHSV(HUE_PINK-15,255, 255), CHSV(HUE_PINK-10,255, 255), CHSV(HUE_PINK-5,255, 255), CHSV(HUE_PINK,255, 255),
-  CHSV(HUE_RED-15, 255, 255),CHSV(HUE_RED-10, 255, 255),CHSV(HUE_RED-5, 255, 255),CHSV(HUE_RED, 255, 255),
-  CHSV(HUE_PINK-15,255, 255), CHSV(HUE_PINK-10,255, 255), CHSV(HUE_PINK-5,255, 255), CHSV(HUE_PINK,255, 255)
-);
+  CHSVPalette16 YellowAndOrange = CHSVPalette16(
+    CHSV(HUE_YELLOW-15, 255, 255),CHSV(HUE_YELLOW-10, 255, 255),CHSV(HUE_YELLOW-5, 255, 255),CHSV(HUE_YELLOW, 255, 255),
+    CHSV(HUE_ORANGE-15,255, 255), CHSV(HUE_ORANGE-10,255, 255), CHSV(HUE_ORANGE-5,255, 255), CHSV(HUE_ORANGE,255, 255),
+    CHSV(HUE_YELLOW-15, 255, 255),CHSV(HUE_YELLOW-10, 255, 255),CHSV(HUE_YELLOW-5, 255, 255),CHSV(HUE_YELLOW, 255, 255),
+    CHSV(HUE_ORANGE-15,255, 255), CHSV(HUE_ORANGE-10,255, 255), CHSV(HUE_ORANGE-5,255, 255), CHSV(HUE_ORANGE,255, 255)
+  );
+  CHSVPalette16 RedAndPurple = CHSVPalette16(
+    CHSV(HUE_RED-15, 255, 255),CHSV(HUE_RED-10, 255, 255),CHSV(HUE_RED-5, 255, 255),CHSV(HUE_RED, 255, 255),
+    CHSV(HUE_PINK-15,255, 255), CHSV(HUE_PINK-10,255, 255), CHSV(HUE_PINK-5,255, 255), CHSV(HUE_PINK,255, 255),
+    CHSV(HUE_RED-15, 255, 255),CHSV(HUE_RED-10, 255, 255),CHSV(HUE_RED-5, 255, 255),CHSV(HUE_RED, 255, 255),
+    CHSV(HUE_PINK-15,255, 255), CHSV(HUE_PINK-10,255, 255), CHSV(HUE_PINK-5,255, 255), CHSV(HUE_PINK,255, 255)
+  );
   v4.color = ColorFromPalette(RedAndPurple, timeCounter+0);
   v2.color = ColorFromPalette(YellowAndOrange, timeCounter+20);
   v3.color = ColorFromPalette(YellowAndOrange, timeCounter+20);
@@ -261,7 +257,7 @@ void loop_topSpot(uint8_t index)
                           NUM_LEDS_GROUNDPLANE+18+18+18-1, topColor);
 }
 
-void setPalette(uint8_t index)
+void topSpot_setPalette(uint8_t index)
 {
   // changing the current palette
   index = index%7;
