@@ -70,7 +70,6 @@ type_edge edges[6] = {
 
 // global array of LED pixels for FastLED library:
 CRGB leds[NUM_LEDS_ALL];
-CRGBPalette16 palette_current;
 
 // Button object for Debounce library:
 Bounce button1 = Bounce();
@@ -81,10 +80,10 @@ void setup_buttons();
 void setup_leds();
 void loop_buttons();
 void loop_blink();
-void loop_topSpot(uint8_t time);
 void loop_fourPoints(uint8_t timeCounter);
-void topSpot_setPalette(uint8_t index);
+void fourPoints_paintEdge(type_edge e);
 
+// setup called once in the beginning
 void setup() {
   // 3 second delay for recovery, slowly blinking build in LED
   digitalWrite(LED_BUILTIN, true);
@@ -97,7 +96,6 @@ void setup() {
 
   setup_buttons();
   setup_leds();
-  palette_current = RainbowColors_p;
 
   v1 = {  0, 59, 60, CHSV(HUE_GREEN, 255, 255)};  // ground point near the connector
   v2 = { 23, 24, 95, CHSV(HUE_RED, 255, 255)};    // ground point
@@ -105,7 +103,7 @@ void setup() {
   v4 = { 77, 78,113, CHSV(HUE_YELLOW, 255, 255)}; // pyramid top
 }
 
-
+// loop called endlessly as fast as possible
 void loop()
 {
   static uint8_t timeCounter=0;
@@ -121,12 +119,7 @@ void loop()
   }
 
   EVERY_N_MILLISECONDS(500) { loop_blink(); }
-/*
-  digitalWrite(LED_BUILTIN, true);
-  delay(1000);
-  digitalWrite(LED_BUILTIN, false);
-  delay(1000);
-*/
+
 }
 
 void setup_buttons()
@@ -169,13 +162,19 @@ void loop_buttons()
   button2.update();
   if( button1.fell() )
   {
-    palette_index++;
-    topSpot_setPalette(palette_index);
+    for( int i=0; i<255; i++)
+    {
+      fadeToBlackBy(leds, NUM_LEDS_ALL, 1);
+      FastLED.show();
+    }
   }
   if( button2.fell() )
   {
-    palette_index--;
-    topSpot_setPalette(palette_index);
+    for( int i=0; i<255; i++)
+    {
+      fadeToBlackBy(leds, NUM_LEDS_ALL, 1);
+      FastLED.show();
+    }
   }
   // Turn on the LED if either button is pressed :
   if ( button1.read() == LOW || button2.read() == LOW ) {
@@ -191,31 +190,31 @@ void loop_blink()
   on = !on;
 }
 
-void paint_edge(type_edge e)
+void fourPoints_paintEdge(type_edge e)
 {
   fill_gradient_RGB(leds, e.start, leds[e.start],
                           e.end, leds[e.end]);
 }
 
-
 void loop_fourPoints(uint8_t timeCounter)
 {
-  CHSVPalette16 YellowAndOrange = CHSVPalette16(
+  const CHSVPalette16 YellowAndOrange = CHSVPalette16(
     CHSV(HUE_YELLOW-15, 255, 255),CHSV(HUE_YELLOW-10, 255, 255),CHSV(HUE_YELLOW-5, 255, 255),CHSV(HUE_YELLOW, 255, 255),
     CHSV(HUE_ORANGE-15,255, 255), CHSV(HUE_ORANGE-10,255, 255), CHSV(HUE_ORANGE-5,255, 255), CHSV(HUE_ORANGE,255, 255),
     CHSV(HUE_YELLOW-15, 255, 255),CHSV(HUE_YELLOW-10, 255, 255),CHSV(HUE_YELLOW-5, 255, 255),CHSV(HUE_YELLOW, 255, 255),
     CHSV(HUE_ORANGE-15,255, 255), CHSV(HUE_ORANGE-10,255, 255), CHSV(HUE_ORANGE-5,255, 255), CHSV(HUE_ORANGE,255, 255)
   );
-  CHSVPalette16 RedAndPurple = CHSVPalette16(
+  const CHSVPalette16 RedAndPurple = CHSVPalette16(
     CHSV(HUE_RED-15, 255, 255),CHSV(HUE_RED-10, 255, 255),CHSV(HUE_RED-5, 255, 255),CHSV(HUE_RED, 255, 255),
     CHSV(HUE_PINK-15,255, 255), CHSV(HUE_PINK-10,255, 255), CHSV(HUE_PINK-5,255, 255), CHSV(HUE_PINK,255, 255),
     CHSV(HUE_RED-15, 255, 255),CHSV(HUE_RED-10, 255, 255),CHSV(HUE_RED-5, 255, 255),CHSV(HUE_RED, 255, 255),
     CHSV(HUE_PINK-15,255, 255), CHSV(HUE_PINK-10,255, 255), CHSV(HUE_PINK-5,255, 255), CHSV(HUE_PINK,255, 255)
   );
-  v4.color = ColorFromPalette(RedAndPurple, timeCounter+0);
-  v2.color = ColorFromPalette(YellowAndOrange, timeCounter+20);
-  v3.color = ColorFromPalette(YellowAndOrange, timeCounter+20);
-  v1.color = ColorFromPalette(RedAndPurple, timeCounter+20);
+
+  v4.color = ColorFromPalette(YellowAndOrange, timeCounter+0);
+  v2.color = ColorFromPalette(RainbowColors_p, timeCounter+20);
+  v3.color = ColorFromPalette(RainbowColors_p, timeCounter+20);
+  v1.color = ColorFromPalette(RainbowStripeColors_p, timeCounter+20);
 
   leds[v1.pixel1] = v1.color;
   leds[v1.pixel2] = v1.color;
@@ -234,69 +233,5 @@ void loop_fourPoints(uint8_t timeCounter)
   leds[v4.pixel3] = v4.color;
 
   for( uint8_t index=0; index<6; index++)
-    paint_edge(edges[index]);
-}
-
-
-void loop_topSpot(uint8_t index)
-{
-  // paint the palette across the ground plane:
-  for( int i = 0; i < NUM_LEDS_GROUNDPLANE; i++)
-  {
-    leds[i] = ColorFromPalette( palette_current, index+i, 255, LINEARBLEND);
-  }
-
-  // take a color from the corners of the ground plane
-  // paint this color in a gradient to the top of the pyramide
-  CRGB topColor = CHSV(HUE_PURPLE,255,255);
-  fill_gradient_RGB(leds, NUM_LEDS_GROUNDPLANE, leds[NUM_LEDS_GROUNDPLANE-1], // from ground color to
-                          NUM_LEDS_GROUNDPLANE+18-1, topColor);               // top color
-  fill_gradient_RGB(leds, NUM_LEDS_GROUNDPLANE+18, topColor,                  // from top color to
-                          NUM_LEDS_GROUNDPLANE+18+18-1, leds[24-1]);          // ground color (24 because long side of ground is 24)
-  fill_gradient_RGB(leds, NUM_LEDS_GROUNDPLANE+18+18, leds[24+18-1],          //
-                          NUM_LEDS_GROUNDPLANE+18+18+18-1, topColor);
-}
-
-void topSpot_setPalette(uint8_t index)
-{
-  // changing the current palette
-  index = index%7;
-
-  // fade to black everytime a palette change happens:
-  for( int i=0; i<64; i++)
-  {
-    fadeToBlackBy(leds, NUM_LEDS_ALL, 4);
-    FastLED.show();
-  }
-
-  // really change the palette:
-  switch(index)
-  {
-    case 0:
-      palette_current = RainbowColors_p;
-      break;
-    case 1:
-      palette_current = PartyColors_p;
-      break;
-    case 2:
-      palette_current = HeatColors_p ;
-      break;
-    case 3:
-      palette_current = ForestColors_p ;
-      break;
-    case 4:
-      palette_current = OceanColors_p ;
-      break;
-    case 5:
-      palette_current = LavaColors_p ;
-      break;
-    case 6:
-      palette_current = HeatColors_p  ;
-      break;
-    case 7:
-      palette_current = Rainbow_gp;
-    default:
-      palette_current = RainbowColors_p;
-      break;
-  }
+    fourPoints_paintEdge(edges[index]);
 }
