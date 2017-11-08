@@ -1,0 +1,6 @@
+#!/bin/bash
+IP=192.168.1.104
+HEXFILE=.pioenvs/yun/firmware.hex
+scp $HEXFILE root@$IP:/root/firmware.hex
+ssh root@$IP 'merge-sketch-with-bootloader.lua firmware.hex'
+ssh root@$IP 'run-avrdude firmware.hex '
