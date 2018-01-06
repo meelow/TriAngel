@@ -17,6 +17,9 @@
 #include "Arduino.h"
 #include "FastLED.h"
 #include "Bounce2.h"
+#include <Bridge.h>
+#include <BridgeServer.h>
+#include <BridgeClient.h>
 
 FASTLED_USING_NAMESPACE
 
@@ -75,6 +78,8 @@ CRGB leds[NUM_LEDS_ALL];
 Bounce button1 = Bounce();
 Bounce button2 = Bounce();
 
+BridgeServer server;
+
 // prototypes of all functions:
 void setup_buttons();
 void setup_leds();
@@ -97,10 +102,59 @@ void setup() {
   setup_buttons();
   setup_leds();
 
+  Bridge.begin();
+  server.listenOnLocalhost();
+  server.begin();
   v1 = {  0, 59, 60, CHSV(HUE_GREEN, 255, 255)};  // ground point near the connector
   v2 = { 23, 24, 95, CHSV(HUE_RED, 255, 255)};    // ground point
   v3 = { 41, 42, 96, CHSV(HUE_BLUE, 255, 255)};   // ground point
   v4 = { 77, 78,113, CHSV(HUE_YELLOW, 255, 255)}; // pyramid top
+}
+void process(BridgeClient client) {
+  // Show boot-up animation:
+  for(uint8_t i=0; i<255; i++)
+  {
+   fill_rainbow( leds, NUM_LEDS_ALL, i, 1);
+   FastLED.show();
+  }
+
+  // fade all leds to black slowly:
+  for( int i=0; i<255; i++)
+  {
+    fadeToBlackBy(leds, NUM_LEDS_ALL, 1);
+    FastLED.show();
+  }
+
+  // read the command
+  String command = client.readStringUntil('/');
+
+  // is "digital" command?
+  if (command == "red")
+  {
+      for(uint8_t i=0; i<NUM_LEDS_ALL; i++)
+      {
+       leds[i] = CRGB(255,0,0);
+       FastLED.show();
+      }
+  }
+
+  // is "analog" command?
+  if (command == "green") {
+      for(uint8_t i=0; i<NUM_LEDS_ALL; i++)
+      {
+       leds[i] = CRGB(0,255,0);
+       FastLED.show();
+      }
+    }
+
+  // is "mode" command?
+  if (command == "blue") {
+      for(uint8_t i=0; i<NUM_LEDS_ALL; i++)
+      {
+       leds[i] = CRGB(0,0,255);
+       FastLED.show();
+      }
+    }
 }
 
 // loop called endlessly as fast as possible
@@ -110,6 +164,23 @@ void loop()
 
   loop_buttons();
 
+  EVERY_N_MILLISECONDS(50)
+  {
+      // Get clients coming from server
+    BridgeClient client = server.accept();
+
+    // There is a new client?
+    if (client) {
+      // Process request
+      process(client);
+
+      // Close connection and free resources.
+      client.stop();
+    }
+
+  }
+
+/*
   EVERY_N_MILLISECONDS(20)
   {
     //loop_topSpot(timeCounter);
@@ -117,6 +188,7 @@ void loop()
     timeCounter++;
     FastLED.show();
   }
+*/
 
   EVERY_N_MILLISECONDS(500) { loop_blink(); }
 

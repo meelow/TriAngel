@@ -1,5 +1,5 @@
 #!/bin/bash
-IP=192.168.1.104
+IP=192.168.178.60
 HEXFILE=.pioenvs/yun/firmware.hex
 scp $HEXFILE root@$IP:/root/firmware.hex
 ssh root@$IP 'merge-sketch-with-bootloader.lua firmware.hex'
